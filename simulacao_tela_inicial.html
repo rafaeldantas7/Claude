@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Guardião das Águas — Cagepa</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #04111f;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ── Fundo animado (céu + água) ── */
+    #sky {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg,
+        #03111e 0%,
+        #062a45 40%,
+        #0a4a7a 70%,
+        #0d6aad 100%);
+    }
+
+    /* Estrelas */
+    .estrela {
+      position: absolute;
+      background: #fff;
+      border-radius: 50%;
+      animation: piscar var(--dur) ease-in-out infinite alternate;
+    }
+    @keyframes piscar { from { opacity: 0.2; } to { opacity: 1; } }
+
+    /* Ondas */
+    #ondas {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 220px;
+    }
+    .onda {
+      position: absolute;
+      bottom: 0;
+      left: -50%;
+      width: 200%;
+      height: 100%;
+      background: rgba(13, 106, 173, 0.35);
+      border-radius: 45% 55% 45% 55% / 30% 30% 70% 70%;
+      animation: onda var(--spd) ease-in-out infinite alternate;
+    }
+    .onda:nth-child(1) { --spd: 5s; background: rgba(10, 74, 122, 0.5);  bottom: 0px;  }
+    .onda:nth-child(2) { --spd: 7s; background: rgba(13,106,173, 0.35); bottom: 20px; animation-delay: -2s; }
+    .onda:nth-child(3) { --spd: 9s; background: rgba(20,140,210, 0.25); bottom: 40px; animation-delay: -4s; }
+    @keyframes onda {
+      from { transform: translateX(-5%) rotate(-1deg); }
+      to   { transform: translateX(5%)  rotate(1deg);  }
+    }
+
+    /* Bolhas */
+    .bolha {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(100, 200, 255, 0.15);
+      border: 1px solid rgba(100, 200, 255, 0.3);
+      animation: subir var(--dur) ease-in infinite;
+    }
+    @keyframes subir {
+      0%   { transform: translateY(0)   scale(1);   opacity: 0.6; }
+      100% { transform: translateY(-80vh) scale(1.4); opacity: 0;   }
+    }
+
+    /* Gotinhas flutuantes */
+    .gota {
+      position: absolute;
+      font-size: var(--sz);
+      animation: flutuar var(--dur) ease-in-out infinite alternate;
+      opacity: 0.5;
+    }
+    @keyframes flutuar {
+      from { transform: translateY(0px) rotate(-5deg); }
+      to   { transform: translateY(-18px) rotate(5deg); }
+    }
+
+    /* ── Container central ── */
+    #container {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 0;
+    }
+
+    /* Selo Cagepa */
+    #cagepa-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 30px;
+      padding: 8px 22px;
+      margin-bottom: 28px;
+      animation: fadeDown 0.8s ease both;
+    }
+    #cagepa-badge .dot {
+      width: 10px; height: 10px;
+      background: #4fc3f7;
+      border-radius: 50%;
+      animation: piscar 1.2s ease-in-out infinite alternate;
+    }
+    #cagepa-badge span {
+      color: #b0d8f5;
+      font-size: 13px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    /* Logo / Título */
+    #titulo-wrapper {
+      text-align: center;
+      margin-bottom: 10px;
+      animation: fadeDown 0.9s ease 0.1s both;
+    }
+    #titulo-cagepa {
+      font-size: 15px;
+      letter-spacing: 6px;
+      color: #4fc3f7;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    #titulo-jogo {
+      font-size: clamp(36px, 6vw, 64px);
+      font-weight: 900;
+      color: #fff;
+      text-shadow:
+        0 0 30px rgba(79, 195, 247, 0.8),
+        0 0 60px rgba(79, 195, 247, 0.4),
+        0 4px 12px rgba(0,0,0,0.6);
+      letter-spacing: 2px;
+      line-height: 1.1;
+    }
+    #titulo-jogo span { color: #4fc3f7; }
+    #subtitulo {
+      font-size: 16px;
+      color: rgba(176, 216, 245, 0.8);
+      font-style: italic;
+      margin-top: 10px;
+      letter-spacing: 1px;
+    }
+
+    /* Personagem placeholder */
+    #personagem {
+      width: 110px;
+      height: 110px;
+      margin: 24px 0 20px;
+      animation: fadeDown 1s ease 0.2s both, flutuar-hero 3s ease-in-out infinite alternate;
+      position: relative;
+    }
+    @keyframes flutuar-hero {
+      from { transform: translateY(0px); }
+      to   { transform: translateY(-12px); }
+    }
+    #personagem svg { width: 100%; height: 100%; filter: drop-shadow(0 0 16px rgba(79,195,247,0.7)); }
+
+    /* Botões */
+    #botoes {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 280px;
+      animation: fadeUp 1s ease 0.3s both;
+    }
+    .btn {
+      position: relative;
+      padding: 16px 0;
+      border: none;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      overflow: hidden;
+    }
+    .btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0);
+      transition: background 0.15s;
+    }
+    .btn:hover::after  { background: rgba(255,255,255,0.08); }
+    .btn:active        { transform: scale(0.97); }
+
+    .btn-jogar {
+      background: linear-gradient(135deg, #0288d1, #0652a8);
+      color: #fff;
+      box-shadow: 0 6px 24px rgba(2,136,209,0.5), 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .btn-jogar:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(2,136,209,0.6); }
+
+    .btn-opcoes {
+      background: rgba(255,255,255,0.07);
+      border: 1.5px solid rgba(79,195,247,0.35);
+      color: #b0d8f5;
+    }
+    .btn-opcoes:hover { transform: translateY(-2px); border-color: rgba(79,195,247,0.7); color: #fff; }
+
+    .btn-sair {
+      background: transparent;
+      border: 1.5px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.4);
+      font-size: 14px;
+    }
+    .btn-sair:hover { border-color: rgba(255,100,100,0.4); color: rgba(255,150,150,0.8); }
+
+    /* Ícones nos botões */
+    .btn-icon { margin-right: 8px; font-size: 18px; }
+
+    /* Barra de nível de água */
+    #water-bar-wrap {
+      margin-top: 30px;
+      width: 280px;
+      animation: fadeUp 1s ease 0.4s both;
+    }
+    #water-bar-label {
+      display: flex;
+      justify-content: space-between;
+      color: rgba(176,216,245,0.7);
+      font-size: 12px;
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+    #water-bar-track {
+      height: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    #water-bar-fill {
+      height: 100%;
+      width: 78%;
+      background: linear-gradient(90deg, #0288d1, #4fc3f7);
+      border-radius: 99px;
+      box-shadow: 0 0 10px rgba(79,195,247,0.6);
+      animation: encher 2.5s ease 1.2s both;
+    }
+    @keyframes encher { from { width: 0%; } to { width: 78%; } }
+
+    /* Versão */
+    #versao {
+      position: absolute;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.2);
+      font-size: 11px;
+      letter-spacing: 2px;
+      z-index: 10;
+    }
+
+    /* Modal de "Jogar" */
+    #modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    #modal-overlay.show { display: flex; animation: fadeIn 0.3s ease; }
+    #modal {
+      background: linear-gradient(160deg, #062a45, #031525);
+      border: 1px solid rgba(79,195,247,0.25);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    }
+    #modal h2 { color: #4fc3f7; font-size: 22px; margin-bottom: 12px; }
+    #modal p  { color: rgba(176,216,245,0.8); font-size: 14px; line-height: 1.7; margin-bottom: 24px; }
+    #modal .btn { width: 100%; }
+
+    /* Animações de entrada */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; } to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Fundo -->
+<div id="sky"></div>
+<div id="ondas">
+  <div class="onda"></div>
+  <div class="onda"></div>
+  <div class="onda"></div>
+</div>
+
+<!-- Container principal -->
+<div id="container">
+
+  <!-- Selo Cagepa -->
+  <div id="cagepa-badge">
+    <div class="dot"></div>
+    <span>Cagepa — Paraíba</span>
+  </div>
+
+  <!-- Títulos -->
+  <div id="titulo-wrapper">
+    <div id="titulo-cagepa">Companhia de Água e Esgotos</div>
+    <div id="titulo-jogo">Guardião<br><span>das Águas</span></div>
+    <div id="subtitulo">Proteja, trate e distribua — salve a cidade!</div>
+  </div>
+
+  <!-- Personagem SVG -->
+  <div id="personagem">
+    <svg viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Corpo -->
+      <rect x="30" y="55" width="40" height="45" rx="8" fill="#0d6aad"/>
+      <!-- Colete laranja (uniforme) -->
+      <rect x="30" y="55" width="40" height="30" rx="4" fill="#e67e22"/>
+      <rect x="44" y="55" width="12" height="30" fill="#0d6aad"/>
+      <!-- Logotipo no colete -->
+      <text x="50" y="68" text-anchor="middle" fill="white" font-size="6" font-weight="bold">CAG</text>
+      <!-- Cabeça -->
+      <circle cx="50" cy="42" r="18" fill="#f5cba7"/>
+      <!-- Capacete -->
+      <path d="M32 42 Q32 24 50 22 Q68 24 68 42 Z" fill="#f39c12"/>
+      <rect x="30" y="42" width="40" height="5" rx="2" fill="#e67e22"/>
+      <!-- Olhos -->
+      <circle cx="44" cy="43" r="3" fill="#2c3e50"/>
+      <circle cx="56" cy="43" r="3" fill="#2c3e50"/>
+      <circle cx="45" cy="42" r="1" fill="white"/>
+      <circle cx="57" cy="42" r="1" fill="white"/>
+      <!-- Sorriso -->
+      <path d="M44 50 Q50 56 56 50" stroke="#c0392b" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <!-- Braços -->
+      <rect x="10" y="56" width="22" height="10" rx="5" fill="#e67e22"/>
+      <rect x="68" y="56" width="22" height="10" rx="5" fill="#e67e22"/>
+      <!-- Mãos -->
+      <circle cx="12" cy="61" r="6" fill="#f5cba7"/>
+      <circle cx="88" cy="61" r="6" fill="#f5cba7"/>
+      <!-- Chave inglesa -->
+      <rect x="2" y="58" width="12" height="4" rx="2" fill="#95a5a6"/>
+      <rect x="2" y="57" width="5" height="6" rx="1" fill="#7f8c8d"/>
+      <!-- Pernas -->
+      <rect x="33" y="97" width="15" height="20" rx="5" fill="#1a5276"/>
+      <rect x="52" y="97" width="15" height="20" rx="5" fill="#1a5276"/>
+      <!-- Botas -->
+      <rect x="31" y="113" width="18" height="8" rx="3" fill="#2c3e50"/>
+      <rect x="50" y="113" width="18" height="8" rx="3" fill="#2c3e50"/>
+      <!-- Gota d'água flutuante -->
+      <ellipse cx="78" cy="30" rx="7" ry="9" fill="#4fc3f7" opacity="0.9"/>
+      <path d="M78 21 Q84 27 84 33 Q84 39 78 39 Q72 39 72 33 Q72 27 78 21Z" fill="#4fc3f7"/>
+      <ellipse cx="75" cy="32" rx="2" ry="3" fill="white" opacity="0.4"/>
+    </svg>
+  </div>
+
+  <!-- Botões -->
+  <div id="botoes">
+    <button class="btn btn-jogar" onclick="mostrarModal()">
+      <span class="btn-icon">▶</span> Jogar
+    </button>
+    <button class="btn btn-opcoes" onclick="alert('Opções: Em breve no Unity!')">
+      <span class="btn-icon">⚙</span> Opções
+    </button>
+    <button class="btn btn-sair" onclick="alert('Sair: Disponível no jogo compilado.')">
+      Sair
+    </button>
+  </div>
+
+  <!-- Barra de nível de água -->
+  <div id="water-bar-wrap">
+    <div id="water-bar-label">
+      <span>💧 Nível Reservatório</span>
+      <span>78%</span>
+    </div>
+    <div id="water-bar-track">
+      <div id="water-bar-fill"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Versão -->
+<div id="versao">v1.0 · CAGEPA © 2025</div>
+
+<!-- Modal de início -->
+<div id="modal-overlay" onclick="fecharModal(event)">
+  <div id="modal">
+    <h2>💧 Missão Iniciando...</h2>
+    <p>
+      Você é o <strong>Guardião das Águas</strong> da Cagepa.<br><br>
+      Conserte vazamentos, eduque cidadãos e mantenha
+      o abastecimento de água da cidade funcionando!
+    </p>
+    <p style="color:#4fc3f7; font-size:13px; margin-bottom:20px;">
+      <strong>Controles:</strong> WASD para mover &nbsp;|&nbsp; E ou Espaço para interagir
+    </p>
+    <button class="btn btn-jogar" style="width:100%" onclick="fecharModal()">
+      ▶ &nbsp; Começar Fase 1
+    </button>
+  </div>
+</div>
+
+<script>
+  // ── Gerar estrelas aleatórias ──
+  const sky = document.getElementById('sky');
+  for (let i = 0; i < 80; i++) {
+    const s = document.createElement('div');
+    s.className = 'estrela';
+    const sz = Math.random() * 2.5 + 0.5;
+    s.style.cssText = `
+      width:${sz}px; height:${sz}px;
+      top:${Math.random()*65}%;
+      left:${Math.random()*100}%;
+      --dur:${(Math.random()*2+1).toFixed(1)}s;
+      animation-delay:${(Math.random()*3).toFixed(1)}s;
+    `;
+    sky.appendChild(s);
+  }
+
+  // ── Gerar bolhas ──
+  function criarBolha() {
+    const b = document.createElement('div');
+    b.className = 'bolha';
+    const sz = Math.random() * 18 + 6;
+    b.style.cssText = `
+      width:${sz}px; height:${sz}px;
+      left:${Math.random()*100}%;
+      bottom:${Math.random()*15}%;
+      --dur:${(Math.random()*6+5).toFixed(1)}s;
+    `;
+    document.body.appendChild(b);
+    setTimeout(() => b.remove(), parseFloat(b.style.getPropertyValue('--dur')) * 1000);
+  }
+  setInterval(criarBolha, 700);
+
+  // ── Gerar gotinhas decorativas ──
+  const gotas = ['💧','💧','🌊','💦'];
+  for (let i = 0; i < 8; i++) {
+    const g = document.createElement('div');
+    g.className = 'gota';
+    g.textContent = gotas[Math.floor(Math.random()*gotas.length)];
+    g.style.cssText = `
+      top:${Math.random()*80+5}%;
+      left:${Math.random()*90+2}%;
+      --sz:${Math.random()*16+12}px;
+      --dur:${(Math.random()*2+2).toFixed(1)}s;
+      animation-delay:${(Math.random()*2).toFixed(1)}s;
+    `;
+    document.body.appendChild(g);
+  }
+
+  // ── Modal ──
+  function mostrarModal() {
+    document.getElementById('modal-overlay').classList.add('show');
+  }
+  function fecharModal(e) {
+    if (!e || e.target === document.getElementById('modal-overlay'))
+      document.getElementById('modal-overlay').classList.remove('show');
+  }
+</script>
+</body>
+</html>
