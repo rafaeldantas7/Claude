@@ -14,7 +14,7 @@
 
 ## Passo 1 — Unity Hub
 
-- Baixe em: https://unity.com/download
+- **Download:** https://unity.com/download
 - Versão atual: Unity Hub 3.x
 - Instale no SSD para melhor desempenho
 
@@ -22,15 +22,16 @@
 
 ## Passo 2 — Conta Unity (gratuita)
 
-- Crie em: https://id.unity.com
-- Ative a licença **Unity Personal** (gratuita)
+- **Criar conta:** https://id.unity.com
+- **Ativar licença Personal:** https://unity.com/products/unity-personal
 - Necessária para usar o Editor
 
 ---
 
 ## Passo 3 — Unity Editor
 
-- Versão recomendada: **Unity 6 LTS** (mais atual e estável)
+- **Versão recomendada:** Unity 6 LTS
+- **Notas de versão:** https://unity.com/releases/editor/whats-new/6000.0.0
 - Instale pelo Unity Hub em: Installs > Install Editor
 - Instale no SSD (447 GB ADATA SU650)
 
@@ -49,11 +50,11 @@
 
 ### Ferramentas de Desenvolvimento
 
-| Módulo | Finalidade | Instalar? |
+| Módulo | Link | Instalar? |
 |---|---|---|
-| Visual Studio Community 2022 | Editor de código C# | **Sim** |
-| Android SDK & NDK Tools | Necessário para build Android | **Sim** (junto com Android Build Support) |
-| OpenJDK | Java para Android | **Sim** (junto com Android Build Support) |
+| Visual Studio Community 2022 | https://visualstudio.microsoft.com/vs/community/ | **Sim** |
+| Android SDK & NDK Tools | Instalado automaticamente junto com Android Build Support | **Sim** |
+| OpenJDK | Instalado automaticamente junto com Android Build Support | **Sim** |
 
 ### Extras recomendados (seu PC aguenta)
 
@@ -68,30 +69,44 @@
 
 Após criar seu primeiro projeto, instale pelo **Package Manager** (Window > Package Manager):
 
-| Pacote | Para que serve |
+| Pacote | Para que serve | Documentação |
+|---|---|---|
+| **Input System** | Controle de teclado, mouse e gamepad moderno | https://docs.unity3d.com/Packages/com.unity.inputsystem@latest |
+| **Cinemachine** | Sistema de câmeras inteligente | https://docs.unity3d.com/Packages/com.unity.cinemachine@latest |
+| **TextMeshPro** | Textos e fontes de alta qualidade | https://docs.unity3d.com/Packages/com.unity.textmeshpro@latest |
+| **2D Sprite** | Ferramentas para jogos 2D | https://docs.unity3d.com/Packages/com.unity.2d.sprite@latest |
+| **Post Processing** | Efeitos visuais (bloom, sombras, etc.) | https://docs.unity3d.com/Packages/com.unity.postprocessing@latest |
+| **Universal Render Pipeline (URP)** | Pipeline de renderização otimizado | https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@latest |
+
+---
+
+## Links de Documentacao e Aprendizado
+
+| Recurso | Link |
 |---|---|
-| **Input System** | Controle de teclado, mouse e gamepad moderno |
-| **Cinemachine** | Sistema de câmeras inteligente |
-| **TextMeshPro** | Textos e fontes de alta qualidade |
-| **2D Sprite** | Ferramentas para jogos 2D |
-| **Post Processing** | Efeitos visuais (bloom, sombras, etc.) |
-| **Universal Render Pipeline (URP)** | Pipeline de renderização otimizado |
+| Documentação oficial Unity | https://docs.unity3d.com |
+| Unity Learn (cursos gratuitos) | https://learn.unity.com |
+| Manual do Unity | https://docs.unity3d.com/Manual/index.html |
+| Scripting API (C#) | https://docs.unity3d.com/ScriptReference/index.html |
+| Asset Store (assets gratuitos e pagos) | https://assetstore.unity.com |
+| Forum Unity | https://forum.unity.com |
+| Unity no YouTube | https://www.youtube.com/@unity |
 
 ---
 
 ## Resumo da Instalação (ordem correta)
 
 ```
-1. Instalar Unity Hub (no SSD)
-2. Criar conta em id.unity.com
-3. Ativar licença Personal (gratuita)
+1. Instalar Unity Hub          → https://unity.com/download
+2. Criar conta Unity           → https://id.unity.com
+3. Ativar licença Personal     → https://unity.com/products/unity-personal
 4. Instalar Unity 6 LTS com os módulos:
    ├── Windows Build Support (IL2CPP)
    ├── Android Build Support
    │   ├── Android SDK & NDK Tools
    │   └── OpenJDK
    ├── WebGL Build Support
-   └── Visual Studio Community 2022
+   └── Visual Studio Community → https://visualstudio.microsoft.com/vs/community/
 5. Criar novo projeto (template 2D ou 3D)
 6. Instalar pacotes via Package Manager
 ```
