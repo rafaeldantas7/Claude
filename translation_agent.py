@@ -3,14 +3,20 @@
 Agente de IA para tradução de literatura cristã protestante (séculos XVI–XIX)
 do inglês arcaico para o português.
 
+Formatos suportados: .txt, .pdf (texto e imagem/escaneado), .docx
+
 Uso:
     python translation_agent.py input.txt
-    python translation_agent.py input.txt -o saida.txt
+    python translation_agent.py input.pdf -o saida.txt
+    python translation_agent.py input.docx -o saida.txt
 """
 
 import argparse
+import base64
+import io
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import anthropic
@@ -116,18 +122,87 @@ Mantenha termos latinos doutrinários na primeira ocorrência com tradução ent
 - Não adicione notas de rodapé, colchetes explicativos nem comentários pessoais"""
 
 # ---------------------------------------------------------------------------
-# Configurações de chunking
+# Configurações
 # ---------------------------------------------------------------------------
 CHUNK_SIZE = 4000   # caracteres por trecho (~600–700 palavras)
 CONTEXT_TAIL = 400  # caracteres finais da tradução anterior passados como contexto
+IMAGE_SCALE = 2.0   # fator de escala para renderização de páginas PDF
+IMAGE_CHARS_THRESHOLD = 80  # média de chars/página abaixo da qual o PDF é tratado como imagem
 
 
 # ---------------------------------------------------------------------------
-# Funções auxiliares
+# Extração de conteúdo por formato
+# ---------------------------------------------------------------------------
+
+def extract_text_from_txt(file_bytes: bytes) -> str:
+    return file_bytes.decode("utf-8", errors="replace")
+
+
+def extract_text_from_docx(file_bytes: bytes) -> str:
+    try:
+        import docx
+    except ImportError:
+        sys.exit("❌  python-docx não instalado. Execute: pip install python-docx")
+
+    doc = docx.Document(io.BytesIO(file_bytes))
+    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+    return "\n\n".join(paragraphs)
+
+
+def _open_pdf(file_bytes: bytes):
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        sys.exit("❌  PyMuPDF não instalado. Execute: pip install PyMuPDF")
+    return fitz.open(stream=file_bytes, filetype="pdf")
+
+
+def is_image_pdf(file_bytes: bytes) -> bool:
+    doc = _open_pdf(file_bytes)
+    total_chars = sum(len(page.get_text()) for page in doc)
+    avg = total_chars / max(len(doc), 1)
+    return avg < IMAGE_CHARS_THRESHOLD
+
+
+def extract_text_from_pdf(file_bytes: bytes) -> str:
+    doc = _open_pdf(file_bytes)
+    pages = [page.get_text() for page in doc]
+    return "\n\n".join(pages)
+
+
+def get_pdf_pages_as_images(file_bytes: bytes) -> list[bytes]:
+    import fitz  # already checked in _open_pdf
+    doc = _open_pdf(file_bytes)
+    matrix = fitz.Matrix(IMAGE_SCALE, IMAGE_SCALE)
+    images: list[bytes] = []
+    for page in doc:
+        pix = page.get_pixmap(matrix=matrix)
+        images.append(pix.tobytes("png"))
+    return images
+
+
+def extract_content(file_bytes: bytes, filename: str) -> tuple[str, object]:
+    """
+    Returns ('text', str) for text-based files and text PDFs,
+    or ('images', list[bytes]) for scanned/image PDFs.
+    """
+    ext = Path(filename).suffix.lower()
+    if ext == ".txt":
+        return "text", extract_text_from_txt(file_bytes)
+    if ext == ".docx":
+        return "text", extract_text_from_docx(file_bytes)
+    if ext == ".pdf":
+        if is_image_pdf(file_bytes):
+            return "images", get_pdf_pages_as_images(file_bytes)
+        return "text", extract_text_from_pdf(file_bytes)
+    sys.exit(f"❌  Formato não suportado: {ext}. Use .txt, .pdf ou .docx")
+
+
+# ---------------------------------------------------------------------------
+# Divisão em trechos
 # ---------------------------------------------------------------------------
 
 def split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
-    """Divide o texto em trechos respeitando limites de parágrafos."""
     paragraphs = re.split(r"\n\s*\n", text.strip())
     chunks: list[str] = []
     current = ""
@@ -138,17 +213,15 @@ def split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
             continue
 
         if len(current) + len(para) + 2 > chunk_size and current:
-            # Salva o trecho atual e começa um novo
             chunks.append(current.strip())
             current = para
         else:
             current = f"{current}\n\n{para}".strip() if current else para
 
-        # Parágrafo único excepcionalmente longo: divide por sentenças
         while len(current) > chunk_size * 1.5:
             sentences = re.split(r"(?<=[.!?;])\s+", current)
             if len(sentences) <= 1:
-                break  # impossível dividir mais — aceita o trecho longo
+                break
             half = len(sentences) // 2
             chunks.append(" ".join(sentences[:half]).strip())
             current = " ".join(sentences[half:]).strip()
@@ -159,15 +232,18 @@ def split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
     return chunks
 
 
+# ---------------------------------------------------------------------------
+# Tradução de trechos de texto
+# ---------------------------------------------------------------------------
+
 def translate_chunk(
     client: anthropic.Anthropic,
     chunk: str,
     chunk_num: int,
     total_chunks: int,
     previous_translation: str = "",
+    on_delta: Callable[[str], None] | None = None,
 ) -> str:
-    """Traduz um trecho com streaming, usando contexto do trecho anterior."""
-
     if previous_translation:
         user_content = (
             f"CONTEXTO — final da tradução do trecho anterior "
@@ -178,8 +254,9 @@ def translate_chunk(
     else:
         user_content = chunk
 
-    print(f"\n📖  Trecho {chunk_num}/{total_chunks}", flush=True)
-    print("─" * 64)
+    if on_delta is None:
+        print(f"\n📖  Trecho {chunk_num}/{total_chunks}", flush=True)
+        print("─" * 64)
 
     parts: list[str] = []
 
@@ -191,7 +268,7 @@ def translate_chunk(
             {
                 "type": "text",
                 "text": SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},  # Cache do prompt de sistema
+                "cache_control": {"type": "ephemeral"},
             }
         ],
         messages=[{"role": "user", "content": user_content}],
@@ -201,19 +278,117 @@ def translate_chunk(
                 event.type == "content_block_delta"
                 and event.delta.type == "text_delta"
             ):
-                print(event.delta.text, end="", flush=True)
-                parts.append(event.delta.text)
+                text = event.delta.text
+                parts.append(text)
+                if on_delta:
+                    on_delta(text)
+                else:
+                    print(text, end="", flush=True)
 
-    print("\n" + "─" * 64)
+    if on_delta is None:
+        print("\n" + "─" * 64)
+
     return "".join(parts)
 
 
 # ---------------------------------------------------------------------------
-# Função principal
+# Tradução de páginas de PDF escaneado (via visão do Claude)
 # ---------------------------------------------------------------------------
 
-def translate_file(input_path: str, output_path: str | None = None) -> None:
-    """Lê um arquivo .txt em inglês e salva a tradução em português."""
+def translate_image_page(
+    client: anthropic.Anthropic,
+    page_image: bytes,
+    page_num: int,
+    total_pages: int,
+    previous_translation: str = "",
+    on_delta: Callable[[str], None] | None = None,
+) -> str:
+    image_b64 = base64.standard_b64encode(page_image).decode()
+
+    context_block = ""
+    if previous_translation:
+        context_block = (
+            f"CONTEXTO — final da tradução da página anterior "
+            f"(use apenas para manter coerência terminológica e estilística; NÃO traduza este bloco):\n"
+            f"«{previous_translation}»\n\n"
+        )
+
+    user_content = [
+        {
+            "type": "text",
+            "text": (
+                f"{context_block}"
+                "A imagem abaixo é uma página digitalizada de um livro cristão protestante "
+                "dos séculos XVI–XIX em inglês arcaico. "
+                "Leia o texto da imagem com atenção e traduza-o integralmente para o português, "
+                "seguindo todas as diretrizes do sistema. "
+                "Produza APENAS o texto traduzido, sem comentários adicionais."
+            ),
+        },
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": image_b64,
+            },
+        },
+    ]
+
+    if on_delta is None:
+        print(f"\n🖼️   Página {page_num}/{total_pages}", flush=True)
+        print("─" * 64)
+
+    parts: list[str] = []
+
+    with client.messages.stream(
+        model="claude-opus-4-7",
+        max_tokens=8192,
+        thinking={"type": "adaptive"},
+        system=[
+            {
+                "type": "text",
+                "text": SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
+        messages=[{"role": "user", "content": user_content}],
+    ) as stream:
+        for event in stream:
+            if (
+                event.type == "content_block_delta"
+                and event.delta.type == "text_delta"
+            ):
+                text = event.delta.text
+                parts.append(text)
+                if on_delta:
+                    on_delta(text)
+                else:
+                    print(text, end="", flush=True)
+
+    if on_delta is None:
+        print("\n" + "─" * 64)
+
+    return "".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Função principal de tradução
+# ---------------------------------------------------------------------------
+
+def translate_file(
+    input_path: str,
+    output_path: str | None = None,
+    on_delta: Callable[[str], None] | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> str:
+    """
+    Traduz um arquivo e retorna o texto traduzido completo.
+
+    Callbacks opcionais para integração com UI:
+      on_delta(text)          — chamado a cada fragmento de texto gerado
+      on_progress(done, total) — chamado após cada trecho/página concluída
+    """
     inp = Path(input_path)
     if not inp.exists():
         sys.exit(f"❌  Arquivo não encontrado: {input_path}")
@@ -221,21 +396,20 @@ def translate_file(input_path: str, output_path: str | None = None) -> None:
     out = (
         Path(output_path)
         if output_path
-        else inp.parent / f"{inp.stem}_pt{inp.suffix}"
+        else inp.parent / f"{inp.stem}_pt.txt"
     )
 
-    print()
-    print("╔══════════════════════════════════════════════════════════════╗")
-    print("║   Agente de Tradução — Literatura Cristã Reformada           ║")
-    print("║   Inglês arcaico (séc. XVI–XIX)  →  Português               ║")
-    print("╚══════════════════════════════════════════════════════════════╝")
-    print(f"\n  Entrada : {inp}")
-    print(f"  Saída   : {out}\n")
+    if on_delta is None:
+        print()
+        print("╔══════════════════════════════════════════════════════════════╗")
+        print("║   Agente de Tradução — Literatura Cristã Reformada           ║")
+        print("║   Inglês arcaico (séc. XVI–XIX)  →  Português               ║")
+        print("╚══════════════════════════════════════════════════════════════╝")
+        print(f"\n  Entrada : {inp}")
+        print(f"  Saída   : {out}\n")
 
-    text = inp.read_text(encoding="utf-8")
-    chunks = split_into_chunks(text)
-    total = len(chunks)
-    print(f"✅  {len(text):,} caracteres divididos em {total} trecho(s)\n")
+    file_bytes = inp.read_bytes()
+    content_type, content = extract_content(file_bytes, inp.name)
 
     client = anthropic.Anthropic()
     translations: list[str] = []
@@ -243,36 +417,68 @@ def translate_file(input_path: str, output_path: str | None = None) -> None:
 
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    for i, chunk in enumerate(chunks, 1):
-        translated = translate_chunk(
-            client=client,
-            chunk=chunk,
-            chunk_num=i,
-            total_chunks=total,
-            previous_translation=prev_translation,
-        )
-        translations.append(translated)
+    if content_type == "text":
+        chunks = split_into_chunks(content)
+        total = len(chunks)
+        if on_delta is None:
+            print(f"✅  {len(content):,} caracteres divididos em {total} trecho(s)\n")
 
-        # Atualiza contexto para o próximo trecho
-        prev_translation = (
-            translated[-CONTEXT_TAIL:]
-            if len(translated) > CONTEXT_TAIL
-            else translated
-        )
+        for i, chunk in enumerate(chunks, 1):
+            translated = translate_chunk(
+                client=client,
+                chunk=chunk,
+                chunk_num=i,
+                total_chunks=total,
+                previous_translation=prev_translation,
+                on_delta=on_delta,
+            )
+            translations.append(translated)
+            prev_translation = translated[-CONTEXT_TAIL:] if len(translated) > CONTEXT_TAIL else translated
 
-        # Salva progresso incremental após cada trecho
-        out.write_text("\n\n".join(translations), encoding="utf-8")
-        print(f"💾  Progresso salvo — {i}/{total} trecho(s) concluído(s)")
+            out.write_text("\n\n".join(translations), encoding="utf-8")
+            if on_progress:
+                on_progress(i, total)
+            elif on_delta is None:
+                print(f"💾  Progresso salvo — {i}/{total} trecho(s) concluído(s)")
 
-    print()
-    print("╔══════════════════════════════════════════════════════════════╗")
-    print("║   ✅  Tradução concluída com sucesso!                        ║")
-    print("╚══════════════════════════════════════════════════════════════╝")
-    print(f"\n  Arquivo salvo em: {out}\n")
+    else:  # images
+        pages: list[bytes] = content
+        total = len(pages)
+        if on_delta is None:
+            print(f"✅  PDF escaneado detectado — {total} página(s) a processar\n")
+
+        for i, page_img in enumerate(pages, 1):
+            translated = translate_image_page(
+                client=client,
+                page_image=page_img,
+                page_num=i,
+                total_pages=total,
+                previous_translation=prev_translation,
+                on_delta=on_delta,
+            )
+            translations.append(translated)
+            prev_translation = translated[-CONTEXT_TAIL:] if len(translated) > CONTEXT_TAIL else translated
+
+            out.write_text("\n\n".join(translations), encoding="utf-8")
+            if on_progress:
+                on_progress(i, total)
+            elif on_delta is None:
+                print(f"💾  Progresso salvo — {i}/{total} página(s) concluída(s)")
+
+    full_translation = "\n\n".join(translations)
+
+    if on_delta is None:
+        print()
+        print("╔══════════════════════════════════════════════════════════════╗")
+        print("║   ✅  Tradução concluída com sucesso!                        ║")
+        print("╚══════════════════════════════════════════════════════════════╝")
+        print(f"\n  Arquivo salvo em: {out}\n")
+
+    return full_translation
 
 
 # ---------------------------------------------------------------------------
-# Ponto de entrada
+# Ponto de entrada CLI
 # ---------------------------------------------------------------------------
 
 def main() -> None:
@@ -285,10 +491,11 @@ def main() -> None:
         epilog="""
 exemplos:
   python translation_agent.py "pilgrims_progress.txt"
-  python translation_agent.py "body_of_divinity.txt" -o "corpo_da_divindade.txt"
+  python translation_agent.py "body_of_divinity.pdf" -o "corpo_da_divindade.txt"
+  python translation_agent.py "institutes.docx" -o "institutas.txt"
         """,
     )
-    parser.add_argument("input", help="Arquivo .txt em inglês a ser traduzido")
+    parser.add_argument("input", help="Arquivo .txt, .pdf ou .docx a ser traduzido")
     parser.add_argument(
         "-o", "--output",
         help="Arquivo de saída (padrão: <input>_pt.txt)",
